@@ -19,12 +19,12 @@ import org.springframework.web.util.UriComponentsBuilder
 import javax.validation.Valid
 
 @RestController
-@RequestMapping
+@RequestMapping("/account")
 class AccountController(
     private val accountService: AccountService
 ) {
 
-    @GetMapping("/account/{id}")
+    @GetMapping("{id}")
     @ResponseStatus(HttpStatus.FOUND)
     fun getAccountById(@PathVariable id: String): AccountModel {
         return accountService.getAccountById(id)
@@ -57,8 +57,4 @@ class AccountController(
     ): ResponseEntity<AccountTransactionResponseDTO> {
        return ResponseEntity.ok(accountService.transfer(formDTO))
     }
-
-
-
-
 }

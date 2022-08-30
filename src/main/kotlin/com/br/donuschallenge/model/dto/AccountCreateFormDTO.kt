@@ -1,8 +1,6 @@
 package com.br.donuschallenge.model.dto
 
-import javax.validation.constraints.Digits
 import javax.validation.constraints.NotBlank
-import javax.validation.constraints.Size
 
 data class AccountCreateFormDTO (
         @field:NotBlank

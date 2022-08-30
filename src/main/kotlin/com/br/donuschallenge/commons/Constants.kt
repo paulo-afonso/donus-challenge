@@ -8,4 +8,5 @@ object Constants {
     const val TRANSFER_INSUFFICIENT_FUNDS_EXCEPTION = "exception.insufficient_funds.message"
     const val INVALID_PASSWORD_EXCEPTION = "exception.invalid_password.message"
     const val INCORRECT_PASSWORD_EXCEPTION = "exception.incorrect_password.message"
+    const val PASSWORD_SIZE = 6
 }

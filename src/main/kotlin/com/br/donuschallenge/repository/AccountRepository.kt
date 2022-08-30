@@ -8,5 +8,4 @@ import org.springframework.stereotype.Repository
 interface AccountRepository: MongoRepository<AccountModel, String> {
 
     fun findByCpf(cpf: String): AccountModel?
-
 }

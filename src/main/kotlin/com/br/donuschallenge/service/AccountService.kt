@@ -18,11 +18,13 @@ class AccountService(
     private val accountRepository: AccountRepository,
 
     @Autowired
-    private val passwordService: PasswordService
+    private val passwordService: ValidatePasswordService,
+
+    @Autowired
+    private val cpfService: ValidateCpfService
 ) {
 
-    fun createAccount(accountFormDto: AccountCreateFormDTO): AccountModel {
-
+    fun validateRegistry(accountFormDto: AccountCreateFormDTO) {
         //If user doesn't set password, randomly generate a 6 digits one
         accountFormDto.password ?: accountFormDto.apply { password = passwordService.generateRandomPassword() }
 
@@ -30,16 +32,19 @@ class AccountService(
         passwordService.validatePasswordLength(accountFormDto.password!!)
 
         //CPF validation (with '.' and '-' or not), and saving only the digits on database
-        if (!accountFormDto.cpf.isCpf()) throw InvalidCpfException()
-        accountFormDto.apply { cpf = clearCpfSpecialCharacters(this.cpf) }
+        val cpf = cpfService.clearAndValidateCpf(accountFormDto.cpf)
+        accountFormDto.apply { this.cpf = cpf }
 
         //Saving only registers with unique CPF
         accountRepository.findByCpf(accountFormDto.cpf)?.let {
             throw DuplicatedCpfException()
         }
+    }
+
+    fun createAccount(accountFormDto: AccountCreateFormDTO): AccountModel {
+        validateRegistry(accountFormDto)
 
         return AccountModel(
-                id = null,
                 name = accountFormDto.name,
                 cpf = accountFormDto.cpf,
                 password = accountFormDto.password!!,
@@ -47,16 +52,14 @@ class AccountService(
             ).also { accountRepository.save(it) }
     }
 
-
-
     fun getAccountById(id: String): AccountModel {
         return accountRepository.findByIdOrNull(id) ?: throw AccountNotFoundException()
     }
 
     fun deposit(depositFormDTO: AccountDepositFormDTO): AccountTransactionResponseDTO {
         //Searching only for CPF's digits
-        val receiverCpf = clearCpfSpecialCharacters(depositFormDTO.cpf)
-        val receiverAccount = getByCpf(receiverCpf)
+        val receiverCpf = cpfService.clearAndValidateCpf(depositFormDTO.cpf)
+        val receiverAccount = cpfService.getByCpf(receiverCpf)
 
         //Validation of depositing only positive values up to 2000.0
         if (depositFormDTO.value <= 0.0 || depositFormDTO.value > 2000.0) throw InvalidTransferException()
@@ -67,23 +70,29 @@ class AccountService(
         return AccountTransactionResponseDTO(receiverName = receiverAccount.name, receivedValue = depositFormDTO.value)
     }
 
-    fun transfer(transferFormDTO: AccountTransferFormDTO): AccountTransactionResponseDTO {
+    fun validateTransfer(transferFormDTO: AccountTransferFormDTO): List<AccountModel> {
+        val senderCpf = cpfService.clearAndValidateCpf(transferFormDTO.senderCpf)
+        val receiverCpf = cpfService.clearAndValidateCpf(transferFormDTO.receiverCpf)
 
-        val senderCpf = clearCpfSpecialCharacters(transferFormDTO.senderCpf)
-        val receiverCpf = clearCpfSpecialCharacters(transferFormDTO.receiverCpf)
-
-        //Validation of origin and destiny accounts
-        val originAccount = getByCpf(senderCpf)
-        val destinyAccount = getByCpf(receiverCpf)
+        //Validation of origin and destiny accounts existence
+        val originAccount = cpfService.getByCpf(senderCpf)
+        val destinyAccount = cpfService.getByCpf(receiverCpf)
 
         //Transfer can only occur with sender's password
         if (transferFormDTO.password != originAccount.password) throw IncorrectPasswordException()
 
-        //Validation of transferring only positive values up to 2000.0
-        if (transferFormDTO.value <= 0.0 || transferFormDTO.value > 2000.0) throw InvalidTransferException()
+        //Validation of transferring only positive values
+        if (transferFormDTO.value <= 0.0) throw InvalidTransferException()
 
         //Cannot transfer value higher than account's balance
         if ((originAccount.balance).minus(transferFormDTO.value) < 0.0) throw InsufficientTransferException()
+
+        return listOf<AccountModel>(originAccount, destinyAccount)
+    }
+
+    fun transfer(transferFormDTO: AccountTransferFormDTO): AccountTransactionResponseDTO {
+        val originAccount = validateTransfer(transferFormDTO)[0]
+        val destinyAccount = validateTransfer(transferFormDTO)[1]
 
         originAccount.balance -= transferFormDTO.value
         destinyAccount.balance += transferFormDTO.value
@@ -93,10 +102,4 @@ class AccountService(
 
         return AccountTransactionResponseDTO(receiverName = destinyAccount.name, receivedValue = transferFormDTO.value)
     }
-
-    fun getByCpf(cpf: String): AccountModel = accountRepository.findByCpf(cpf) ?: throw AccountNotFoundException()
-
-    fun clearCpfSpecialCharacters(cpf: String) = Regex("\\D").replace(cpf, "")
-
-
 }
